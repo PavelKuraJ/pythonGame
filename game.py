@@ -1,5 +1,3 @@
-# простая игра "Угадай число"
-
 import random
 
 def play():
