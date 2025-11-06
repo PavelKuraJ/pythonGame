@@ -100,7 +100,7 @@ def main():
                         start_mod.run(screen)
                     elif choice == "Настройки":
                         import settings as settings_mod
-                        settings_mod.run(screen)
+                        screen = settings_mod.run(screen)
                     elif choice == "Об игре":
                         import about as about_mod
                         about_mod.run(screen)
