@@ -125,7 +125,7 @@ def run(screen):
                 box_y = (screen.get_height() - box_h) // 2
 
                 frame_surf = pygame.Surface((box_w, box_h), pygame.SRCALPHA)
-                # постоянная прозрачность рамки ~50%
+                # постоянная прозрачность рамки ~50%; value = int(percent/100 * 255)
                 pygame.draw.rect(frame_surf, (80, 80, 80, 127), frame_surf.get_rect(), border_radius=12)
                 screen.blit(frame_surf, (box_x, box_y))
 
@@ -166,7 +166,7 @@ def run(screen):
                 box_y = (screen.get_height() - box_h) // 2
 
                 frame_surf = pygame.Surface((box_w, box_h), pygame.SRCALPHA)
-                # постоянная прозрачность рамки ~50%
+                # постоянная прозрачность рамки ~50%; value = int(percent/100 * 255)
                 pygame.draw.rect(frame_surf, (80, 80, 80, 127), frame_surf.get_rect(), border_radius=12)
                 screen.blit(frame_surf, (box_x, box_y))
 

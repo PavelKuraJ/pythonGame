@@ -1,4 +1,5 @@
 import pygame
+import os
 
 def run(screen):
     """Заглушка для настроек с выбором разрешения.
@@ -12,6 +13,7 @@ def run(screen):
     clock = pygame.time.Clock()
     font = pygame.font.SysFont("Times New Roman", 28)
     hint_font = pygame.font.SysFont(None, 20)
+    project_dir = os.path.dirname(os.path.abspath(__file__))
 
     resolutions = [(640,480),(720,576),(800,600),(1024,768),(1280,960)]
     res_labels = [f"{w} x {h}" for (w,h) in resolutions]
@@ -47,6 +49,14 @@ def run(screen):
                         current_index = selected_index
                         new_size = resolutions[current_index]
                         screen = pygame.display.set_mode(new_size)
+                        # сохраняем выбор в config.json
+                        try:
+                            cfg_path = os.path.join(project_dir, 'config.json')
+                            with open(cfg_path, 'w', encoding='utf-8') as f:
+                                import json
+                                json.dump({'resolution': [new_size[0], new_size[1]]}, f)
+                        except Exception:
+                            pass
                         dropdown_open = False
                 elif event.key == pygame.K_UP:
                     if dropdown_open:
