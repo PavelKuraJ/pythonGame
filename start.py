@@ -36,9 +36,9 @@ def run(screen):
     clock = pygame.time.Clock()
 
     # настройки времени в миллисекундах
-    APPEAR_MS = 1500
-    HOLD_MS = 800
-    FADE_MS = 1500
+    APPEAR_MS = 2500 # длительность появления
+    HOLD_MS = 2000 # длительность удержания
+    FADE_MS = 2500 # длительность затухания
 
     # тексты
     TEXT1 = "Приготовьтесь окунуться в мир и стать участником событий, на которые иногда..."
@@ -125,9 +125,8 @@ def run(screen):
                 box_y = (screen.get_height() - box_h) // 2
 
                 frame_surf = pygame.Surface((box_w, box_h), pygame.SRCALPHA)
-                # рисуем полную форму и затем задаём общую альфу, чтобы рамка появлялась/затухала с текстом
-                pygame.draw.rect(frame_surf, (80, 80, 80, 255), frame_surf.get_rect(), border_radius=12)
-                frame_surf.set_alpha(alpha0)
+                # постоянная прозрачность рамки ~50%
+                pygame.draw.rect(frame_surf, (80, 80, 80, 127), frame_surf.get_rect(), border_radius=12)
                 screen.blit(frame_surf, (box_x, box_y))
 
                 text_surf0 = pygame.Surface((text_block_w, text_block_h), pygame.SRCALPHA)
@@ -167,8 +166,8 @@ def run(screen):
                 box_y = (screen.get_height() - box_h) // 2
 
                 frame_surf = pygame.Surface((box_w, box_h), pygame.SRCALPHA)
-                pygame.draw.rect(frame_surf, (80, 80, 80, 255), frame_surf.get_rect(), border_radius=12)
-                frame_surf.set_alpha(alpha)
+                # постоянная прозрачность рамки ~50%
+                pygame.draw.rect(frame_surf, (80, 80, 80, 127), frame_surf.get_rect(), border_radius=12)
                 screen.blit(frame_surf, (box_x, box_y))
 
                 text_surf = pygame.Surface((text_block_w, text_block_h), pygame.SRCALPHA)
