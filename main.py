@@ -1,12 +1,26 @@
 #!/usr/bin/env python3
 #точка входа для игры, вызывает play из game.py
-from game import play
+
+# безопасный импорт play (чтобы импорт не ломал запуск, если game.py отсутствует)
+try:
+    from game import play
+except Exception:
+    play = None
+
 import pygame
 import sys #интерфейс к интерпретатору
 import os #API для взаимодействия с ОС
 import json #импортируем модуль для работы с JSON
 
 FPS = 60
+
+# Убедиться, что рабочая директория — папка проекта.
+# Это важно при запуске через ярлык (который может задавать другой cwd).
+project_dir = os.path.dirname(os.path.abspath(__file__))
+try:
+    os.chdir(project_dir)
+except Exception:
+    pass
 
 def init():
     """Инициализация pygame и создание игрового окна.
@@ -43,7 +57,6 @@ def init():
 
 def draw_menu(screen, menu_font, hint_font, items, selected_index):
     """Отрисовать вертикальное меню, выровненное по центру экрана.
-
     menu_font — шрифт для пунктов меню.
     hint_font — шрифт для подсказки внизу экрана.
     """
@@ -105,7 +118,7 @@ def main():
     menu_font, hint_font = make_fonts_for(prev_size)
 
     # меню
-    menu_items = ["Начать игру", "Настройки", "Об игре", "Выход"]
+    menu_items = ["Стартуем", "Настройки", "Об игре", "Выход"]
     selected = 0
     in_menu = True
 
@@ -132,7 +145,7 @@ def main():
                     if choice == "Выход":
                         pygame.quit()
                         sys.exit()
-                    elif choice == "Начать игру":
+                    elif choice == "Стартуем":
                         # импортируем модуль при выборе, чтобы избежать ненужных зависимостей
                         import start as start_mod
                         start_mod.run(screen)
