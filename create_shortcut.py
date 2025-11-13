@@ -1,103 +1,131 @@
-"""
-Создать ярлык (.lnk) на рабочем столе.
-
+r"""
+Создать ярлык .lnk, который запускает pythonw с аргументом (main.py).
+Автоустановка pywin32 по умолчанию; можно отключить --no-install.
 Примеры:
   python create_shortcut.py
-  python create_shortcut.py --name "MyGame.lnk" --target pythonw
-  python create_shortcut.py --target run-bat --force
-
-Автоустановка:
-  При отсутствии win32com (pywin32) скрипт попытается выполнить:
-    python -m pip install pywin32
-  и затем импортировать win32com. Если установка неуспешна — используется VBS-фоллбек.
+  python create_shortcut.py --name "MyGame.lnk" --force
+  python create_shortcut.py --script "C:\path\to\main.py" --icon "C:\icon.ico"
 """
-
 import os
 import sys
 import shutil
-import tempfile
 import subprocess
+import tempfile
 import argparse
 
 def get_desktop_path(custom=None):
     if custom:
         return os.path.expanduser(custom)
     home = os.path.expanduser("~")
-    desktop = os.path.join(home, "Desktop")
-    return desktop
+    return os.path.join(home, "Desktop")
 
-def ensure_pywin32():
+def try_install_pywin32(timeout=120):
+    """Попытаться установить pywin32 в текущем интерпретаторе.
+    Возвращает True при успехе, False при неудаче или при истечении таймаута.
+    Использует --user, чтобы обычно избежать прав администратора.
+    """
+    cmd = [sys.executable, "-m", "pip", "install", "--user", "pywin32", "--disable-pip-version-check"]
+    try:
+        print("Пытаюсь установить pywin32: {}".format(" ".join(cmd)))
+        subprocess.check_call(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=timeout)
+        return True
+    except subprocess.CalledProcessError as e:
+        print("pip вернул ошибку при установке pywin32:", e, file=sys.stderr)
+        return False
+    except subprocess.TimeoutExpired:
+        print("Установка pywin32 превысила время ожидания ({}s).".format(timeout), file=sys.stderr)
+        return False
+    except KeyboardInterrupt:
+        print("Установка прервана пользователем.", file=sys.stderr)
+        return False
+    except FileNotFoundError:
+        print("pip не найден (вызов python -m pip завершился некорректно).", file=sys.stderr)
+        return False
+    except Exception as e:
+        print("Неожиданная ошибка при попытке установки pywin32:", e, file=sys.stderr)
+        return False
+
+def ensure_win32(no_install=False):
+    """Попытаться импортировать win32com; при отсутствии и разрешении — установить pywin32."""
     try:
         import win32com  # type: ignore
         return True
     except Exception:
         pass
-    # Пытаться установить pywin32 в текущем интерпретаторе
-    try:
-        print("pywin32 не найден — пытаюсь установить через pip...")
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "pywin32"])
-    except Exception as e:
-        print("Ошибка установки pywin32:", e, file=sys.stderr)
+
+    if no_install:
+        print("win32com не найден и автоустановка отключена (--no-install). Используем VBS-фоллбек.")
         return False
-    # Попробовать импортировать снова
+
+    ok = try_install_pywin32()
+    if not ok:
+        print("Автоустановка pywin32 не удалась — используем VBS-фоллбек.", file=sys.stderr)
+        return False
+
+    # попытка импортировать после установки
     try:
+        import importlib
+        importlib.invalidate_caches()
         import win32com  # type: ignore
         return True
     except Exception as e:
         print("После установки импорт win32com не удался:", e, file=sys.stderr)
         return False
 
-def create_shortcut_win32(shortcut_path, target, args="", workdir=None, icon=None, description=""):
+def create_shortcut_win32(path, target, args="", workdir=None, icon=None, desc=""):
     from win32com.client import Dispatch  # type: ignore
     shell = Dispatch("WScript.Shell")
-    shortcut = shell.CreateShortCut(shortcut_path)
+    shortcut = shell.CreateShortCut(path)
     shortcut.Targetpath = target
-    if args:
-        shortcut.Arguments = args
+    shortcut.Arguments = args or ""
     if workdir:
         shortcut.WorkingDirectory = workdir
     if icon:
         shortcut.IconLocation = icon
-    if description:
-        shortcut.Description = description
+    if desc:
+        shortcut.Description = desc
     shortcut.save()
 
-def create_shortcut_vbs(shortcut_path, target, args="", workdir=None, icon=None, description=""):
-    vbs = []
-    vbs.append('Set oWS = WScript.CreateObject("WScript.Shell")')
-    vbs.append('Set oLink = oWS.CreateShortcut("{}")'.format(shortcut_path.replace('"', '""')))
-    vbs.append('oLink.TargetPath = "{}"'.format(target.replace('"', '""')))
+def create_shortcut_vbs(path, target, args="", workdir=None, icon=None, desc=""):
+    vbs = [
+        'Set oWS = WScript.CreateObject("WScript.Shell")',
+        'Set oLink = oWS.CreateShortcut("{}")'.format(path.replace('"','""')),
+        'oLink.TargetPath = "{}"'.format(target.replace('"','""'))
+    ]
     if args:
-        vbs.append('oLink.Arguments = "{}"'.format(args.replace('"', '""')))
+        vbs.append('oLink.Arguments = "{}"'.format(args.replace('"','""')))
     if workdir:
-        vbs.append('oLink.WorkingDirectory = "{}"'.format(workdir.replace('"', '""')))
+        vbs.append('oLink.WorkingDirectory = "{}"'.format(workdir.replace('"','""')))
     if icon:
-        vbs.append('oLink.IconLocation = "{}"'.format(icon.replace('"', '""')))
-    if description:
-        vbs.append('oLink.Description = "{}"'.format(description.replace('"', '""')))
+        vbs.append('oLink.IconLocation = "{}"'.format(icon.replace('"','""')))
+    if desc:
+        vbs.append('oLink.Description = "{}"'.format(desc.replace('"','""')))
     vbs.append('oLink.Save')
 
-    fd, path = tempfile.mkstemp(suffix=".vbs", text=True)
+    fd, tmp = tempfile.mkstemp(suffix=".vbs", text=True)
     os.close(fd)
     try:
-        with open(path, "w", encoding="utf-8") as f:
+        with open(tmp, "w", encoding="utf-8") as f:
             f.write("\n".join(vbs))
-        subprocess.check_call(["cscript", "//NoLogo", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        # запуск cscript для выполнения скрипта создания ярлыка (без вывода)
+        subprocess.check_call(["cscript", "//NoLogo", tmp], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30)
+    except subprocess.TimeoutExpired:
+        print("VBS-скрипт создания ярлыка превысил время ожидания.", file=sys.stderr)
+        raise
     finally:
         try:
-            os.remove(path)
+            os.remove(tmp)
         except Exception:
             pass
 
 def parse_args():
-    p = argparse.ArgumentParser(description="Create desktop shortcut for pythonGame")
-    p.add_argument("--name", "-n", default="pythonGame.lnk", help="Имя ярлыка (по умолчанию: pythonGame.lnk)")
-    p.add_argument("--target", "-t", choices=["pythonw", "python", "run-bat"], default="pythonw",
-                   help="Что запускать: pythonw|python|run-bat (run_game.bat в проекте)")
-    p.add_argument("--script", "-s", default=None, help="Путь к main.py (по умолчанию — ./main.py в проекте)")
-    p.add_argument("--desktop", "-d", default=None, help="Путь к рабочему столу (по умолчанию определяется автоматически)")
-    p.add_argument("--icon", help="Путь к файлу иконки (.ico) для ярлыка")
-    p.add_argument("--force", "-f", action="store_true", help="Перезаписать существующий ярлык")
+    p = argparse.ArgumentParser(description="Create a pythonw shortcut for this project")
+    p.add_argument("--name", "-n", default="pythonGame.lnk", help="Shortcut name on desktop")
+    p.add_argument("--script", "-s", default=None, help="Path to script to pass as argument (default: ./main.py)")
+    p.add_argument("--icon", help="Path to .ico file for the shortcut")
+    p.add_argument("--desktop", help="Custom desktop folder (default: current user's Desktop)")
+    p.add_argument("--force", "-f", action="store_true", help="Overwrite existing shortcut")
+    p.add_argument("--no-install", action="store_true", help="Do not attempt to install pywin32 automatically")
     return p.parse_args()
 
 def main():
@@ -107,65 +135,47 @@ def main():
     os.makedirs(desktop, exist_ok=True)
     shortcut_path = os.path.join(desktop, args.name)
 
-    # выбрать цель запуска
-    run_bat = os.path.join(project_dir, "run_game.bat")
-    if args.target == "run-bat":
-        if not os.path.exists(run_bat):
-            print("run_game.bat не найден в проекте, создайте run_game.bat или выберите другую цель.", file=sys.stderr)
-            sys.exit(1)
-        target = run_bat
-        target_args = ""
+    script = args.script or os.path.join(project_dir, "main.py")
+    if not os.path.exists(script):
+        print("Ошибка: не найден скрипт:", script, file=sys.stderr)
+        sys.exit(1)
+
+    # выбрать pythonw (без консоли) или python если pythonw отсутствует
+    pythonw = shutil.which("pythonw")
+    pythonexe = shutil.which("python")
+    if pythonw:
+        target = pythonw
+    elif pythonexe:
+        target = pythonexe
     else:
-        pythonw_path = shutil.which("pythonw")
-        python_path = shutil.which("python")
-        if args.target == "pythonw":
-            if pythonw_path:
-                target = pythonw_path
-            elif python_path:
-                print("pythonw не найден, падаем на python")
-                target = python_path
-            else:
-                print("Не найден python/pythonw в PATH.", file=sys.stderr)
-                sys.exit(1)
-        else:  # "python"
-            if python_path:
-                target = python_path
-            elif pythonw_path:
-                target = pythonw_path
-            else:
-                print("Не найден python в PATH.", file=sys.stderr)
-                sys.exit(1)
-        # скрипт для передачи как аргумент
-        script_path = args.script or os.path.join(project_dir, "main.py")
-        if not os.path.exists(script_path):
-            print("Не найден скрипт для запуска:", script_path, file=sys.stderr)
-            sys.exit(1)
-        target_args = '"{}"'.format(script_path)
+        print("Ошибка: python не найден в PATH", file=sys.stderr)
+        sys.exit(1)
+
+    target_args = '"{}"'.format(os.path.abspath(script))
+    workdir = project_dir
+    icon = args.icon
+    desc = "Запуск pythonGame (pythonw)"
 
     if os.path.exists(shortcut_path) and not args.force:
         print("Ярлык уже существует:", shortcut_path, "(используйте --force для перезаписи)")
         return
 
-    workdir = project_dir
-    description = "Запуск pythonGame"
-    icon = args.icon
-
-    # Попытка создать через win32 (pywin32). Если не установлен — попытка автoустановки.
-    use_win32 = ensure_pywin32()
+    # попытка через win32com (pywin32)
+    use_win32 = ensure_win32(no_install=args.no_install)
     if use_win32:
         try:
-            create_shortcut_win32(shortcut_path, target, args=target_args, workdir=workdir, icon=icon, description=description)
+            create_shortcut_win32(shortcut_path, target, args=target_args, workdir=workdir, icon=icon, desc=desc)
             print("Ярлык создан (win32):", shortcut_path)
             return
         except Exception as e:
-            print("Ошибка создания ярлыка через win32com:", e, file=sys.stderr)
+            print("Не удалось создать ярлык через win32com:", e, file=sys.stderr)
 
-    # fallback на VBS
+    # fallback через VBS (также создаёт .lnk, использует target = pythonw/python)
     try:
-        create_shortcut_vbs(shortcut_path, target, args=target_args, workdir=workdir, icon=icon, description=description)
+        create_shortcut_vbs(shortcut_path, target, args=target_args, workdir=workdir, icon=icon, desc=desc)
         print("Ярлык создан (VBS):", shortcut_path)
     except Exception as e:
-        print("Не удалось создать ярлык:", e, file=sys.stderr)
+        print("Ошибка: не удалось создать ярлык через VBS:", e, file=sys.stderr)
         sys.exit(1)
 
 if __name__ == "__main__":
