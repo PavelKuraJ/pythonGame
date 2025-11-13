@@ -82,9 +82,48 @@ def run(screen):
                 pygame.quit()
                 return screen
             elif event.type == pygame.KEYDOWN:
-                # ESC возвращает в меню только на завершающей стадии
-                if event.key == pygame.K_ESCAPE and stage == 3:
-                    running = False
+                # обработка клавиш для стадии выбора цвета (stage == 3)
+                if stage == 3:
+                    if event.key == pygame.K_ESCAPE:
+                        stage = 4
+                        stage_start = now
+                    elif event.key in (pygame.K_LEFT, pygame.K_UP):
+                        color_selected = (color_selected - 1) % len(COLOR_OPTIONS)
+                    elif event.key in (pygame.K_RIGHT, pygame.K_DOWN):
+                        color_selected = (color_selected + 1) % len(COLOR_OPTIONS)
+                    elif event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+                        # подтверждение выбранного варианта
+                        color_chosen = COLOR_OPTIONS[color_selected][0]
+                        save_path = os.path.join(project_dir, SAVE_FILENAME)
+                        try:
+                            with open(save_path, "w", encoding="utf-8") as f:
+                                json.dump({"color": color_chosen}, f, ensure_ascii=False, indent=2)
+                        except Exception:
+                            pass
+                        stage = 4
+                        stage_start = now
+                    elif event.key in (pygame.K_1, pygame.K_KP1, pygame.K_2, pygame.K_KP2, pygame.K_3, pygame.K_KP3):
+                        # быстрый выбор по цифрам 1/2/3
+                        if event.key in (pygame.K_1, pygame.K_KP1):
+                            idx = 0
+                        elif event.key in (pygame.K_2, pygame.K_KP2):
+                            idx = 1
+                        else:
+                            idx = 2
+                        color_selected = idx
+                        color_chosen = COLOR_OPTIONS[color_selected][0]
+                        save_path = os.path.join(project_dir, SAVE_FILENAME)
+                        try:
+                            with open(save_path, "w", encoding="utf-8") as f:
+                                json.dump({"color": color_chosen}, f, ensure_ascii=False, indent=2)
+                        except Exception:
+                            pass
+                        stage = 4
+                        stage_start = now
+                else:
+                    # ESC возвращает в меню только на завершающей стадии (stage==4)
+                    if event.key == pygame.K_ESCAPE and stage == 4:
+                        running = False
 
         # если размер экрана изменился (например, сменили разрешение) — пересоздать фон
         if bg is not None and screen.get_size() != bg.get_size():
@@ -190,64 +229,59 @@ def run(screen):
                 screen.blit(text_surf, (box_x + frame_padding, box_y + frame_padding))
 
         elif stage == 3:
-            # показываем PROMPT_TEXT и варианты выбора цвета
+            # PROMPT_TEXT + нумерованный список располагаются в нижней части окна,
+            # список выровнен по левому краю (margin_x)
             screen.fill((0,0,0))
-            prompt_font = pygame.font.SysFont("Times New Roman", 24)
-            small_font = pygame.font.SysFont("Arial", 18)
-            # разбиение prompt на строки (простая ширина)
-            wrap_w = screen.get_width() - 120
-            lines = wrap_text(PROMPT_TEXT, prompt_font, wrap_w)
-            y = 80
-            for line in lines:
-                surf = prompt_font.render(line, True, (220,220,220))
-                screen.blit(surf, ((screen.get_width() - surf.get_width())//2, y))
+            prompt_font = pygame.font.SysFont("Times New Roman", 22)
+            opt_font = pygame.font.SysFont("Arial", 26)
+            hint_font = pygame.font.SysFont("Arial", 16)
+
+            sw, sh = screen.get_size()
+            margin_x = 80
+            margin_bottom = 40  # место для подсказки внизу
+
+            # подготовить строки PROMPT_TEXT и вычислить высоту блока текста
+            wrap_w = sw - 2 * margin_x
+            prompt_lines = wrap_text(PROMPT_TEXT, prompt_font, wrap_w)
+            prompt_heights = [prompt_font.size(l)[1] for l in prompt_lines]
+            prompt_total_h = sum(h + 6 for h in prompt_heights)  # 6px между строками
+
+            # высота списка
+            line_h = opt_font.get_height() + 8
+            list_total_h = len(COLOR_OPTIONS) * line_h
+
+            # общий блок (текст сверху, список сразу под ним), привязан к нижней части окна
+            total_h = prompt_total_h + 12 + list_total_h  # 12px отступ между текстом и списком
+            start_y = sh - margin_bottom - total_h
+
+            # отрисовать PROMPT_TEXT (в верхней части блока), выровненный по левому краю margin_x
+            y = start_y
+            for line in prompt_lines:
+                surf = prompt_font.render(line, True, (200,200,200))
+                screen.blit(surf, (margin_x, y))
                 y += surf.get_height() + 6
 
-            # отрисовка опций цветов
-            opts_y = y + 30
-            opt_w = 140
-            opt_h = 60
-            gap = 30
-            total_w = len(COLOR_OPTIONS) * opt_w + (len(COLOR_OPTIONS)-1) * gap
-            start_x = (screen.get_width() - total_w) // 2
+            # небольшой отступ перед списком
+            y += 12
+
+            # отрисовать нумерованный список под текстом, выровненный по левому краю (margin_x)
+            list_x = margin_x
             for i, (name, rgb) in enumerate(COLOR_OPTIONS):
-                x = start_x + i * (opt_w + gap)
-                rect = pygame.Rect(x, opts_y, opt_w, opt_h)
-                # подсветка выбранной опции рамкой
-                pygame.draw.rect(screen, rgb, rect, border_radius=8)
-                if i == color_selected:
-                    pygame.draw.rect(screen, (255,255,255), rect, width=4, border_radius=8)
-                label = small_font.render(name, True, (255,255,255))
-                screen.blit(label, (rect.x + (opt_w - label.get_width())//2, rect.y + opt_h + 8))
+                prefix = f"{i+1}. "
+                text = prefix + name
+                is_sel = (i == color_selected)
+                color = (255,255,255) if is_sel else (200,200,200)
+                txt_surf = opt_font.render(text, True, color)
+                screen.blit(txt_surf, (list_x, y + i * line_h))
+                if is_sel:
+                    # небольшая вертикальная метка слева от выбранного пункта
+                    mark_x = list_x - 12
+                    mark_y = y + i * line_h + 2
+                    pygame.draw.rect(screen, (255,255,255), (mark_x, mark_y, 6, txt_surf.get_height() - 4))
 
-            hint = small_font.render("←/→ — выбор, ENTER — подтвердить", True, (180,180,180))
-            screen.blit(hint, ((screen.get_width() - hint.get_width())//2, screen.get_height() - 40))
-
-            # события для выбора
-            for ev in pygame.event.get():
-                if ev.type == pygame.QUIT:
-                    pygame.quit()
-                    return screen
-                elif ev.type == pygame.KEYDOWN:
-                    if ev.key == pygame.K_ESCAPE:
-                        # отмена — сразу к заглушке (или можно вернуться в меню)
-                        stage = 4
-                        stage_start = now
-                    elif ev.key in (pygame.K_LEFT, pygame.K_UP):
-                        color_selected = (color_selected - 1) % len(COLOR_OPTIONS)
-                    elif ev.key in (pygame.K_RIGHT, pygame.K_DOWN):
-                        color_selected = (color_selected + 1) % len(COLOR_OPTIONS)
-                    elif ev.key == pygame.K_RETURN or ev.key == pygame.K_KP_ENTER:
-                        # подтверждение — сохранить выбор в файл и перейти дальше
-                        color_chosen = COLOR_OPTIONS[color_selected][0]
-                        save_path = os.path.join(project_dir, SAVE_FILENAME)
-                        try:
-                            with open(save_path, "w", encoding="utf-8") as f:
-                                json.dump({"color": color_chosen}, f, ensure_ascii=False, indent=2)
-                        except Exception:
-                            pass
-                        stage = 4
-                        stage_start = now
+            # подсказка внизу экрана (по центру)
+            hint = hint_font.render("←/→ или ↑/↓ — навигация, 1/2/3 — быстрый выбор, ENTER — подтвердить", True, (150,150,150))
+            screen.blit(hint, ((sw - hint.get_width()) // 2, sh - 30))
 
         elif stage == 4:
             # чёрный экран-заглушка с инструкцией выхода (раньше был stage==3)
