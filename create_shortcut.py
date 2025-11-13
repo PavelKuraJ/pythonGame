@@ -14,6 +14,7 @@ import tempfile
 import argparse
 
 def get_desktop_path(custom=None):
+    # возвращение пути к рабочему столу пользователя
     if custom:
         return os.path.expanduser(custom)
     home = os.path.expanduser("~")
@@ -72,6 +73,7 @@ def ensure_win32(no_install=False):
         print("После установки импорт win32com не удался:", e, file=sys.stderr)
         return False
 
+# Создание ярлыка через win32com
 def create_shortcut_win32(path, target, args="", workdir=None, icon=None, desc=""):
     from win32com.client import Dispatch  # type: ignore
     shell = Dispatch("WScript.Shell")
@@ -86,6 +88,7 @@ def create_shortcut_win32(path, target, args="", workdir=None, icon=None, desc="
         shortcut.Description = desc
     shortcut.save()
 
+# Создание ярлыка через VBS
 def create_shortcut_vbs(path, target, args="", workdir=None, icon=None, desc=""):
     vbs = [
         'Set oWS = WScript.CreateObject("WScript.Shell")',
@@ -118,6 +121,7 @@ def create_shortcut_vbs(path, target, args="", workdir=None, icon=None, desc="")
         except Exception:
             pass
 
+# Парсинг аргументов командной строки
 def parse_args():
     p = argparse.ArgumentParser(description="Create a pythonw shortcut for this project")
     p.add_argument("--name", "-n", default="pythonGame.lnk", help="Shortcut name on desktop")
@@ -128,6 +132,7 @@ def parse_args():
     p.add_argument("--no-install", action="store_true", help="Do not attempt to install pywin32 automatically")
     return p.parse_args()
 
+# Главная функция
 def main():
     args = parse_args()
     project_dir = os.path.dirname(os.path.abspath(__file__))
